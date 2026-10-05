@@ -22,18 +22,22 @@ async function startCamera() {
             return;
         }
 
-        // เลือกกล้องหลัง
+
+        // พยายามเลือกกล้องหลัง
         currentCameraIndex = cameras.findIndex(camera =>
             camera.label.toLowerCase().includes("back") ||
             camera.label.toLowerCase().includes("rear") ||
             camera.label.toLowerCase().includes("environment")
         );
 
+
         if (currentCameraIndex === -1) {
             currentCameraIndex = 0;
         }
 
+
         startScanning();
+
 
     } catch (error) {
 
@@ -43,6 +47,7 @@ async function startCamera() {
             "❌ ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตการใช้กล้อง";
     }
 }
+
 
 
 // =====================================
@@ -55,14 +60,18 @@ function startScanning() {
 
         try {
             html5QrCode.clear();
-        } catch (e) {
-            console.log(e);
+        } catch (error) {
+            console.log(error);
         }
     }
 
+
     html5QrCode = new Html5Qrcode("reader");
 
-    const cameraId = cameras[currentCameraIndex].id;
+
+    const cameraId =
+        cameras[currentCameraIndex].id;
+
 
     html5QrCode.start(
 
@@ -88,6 +97,7 @@ function startScanning() {
         document.getElementById("scan-result").innerText =
             "📷 กำลังสแกน...";
 
+
     }).catch(error => {
 
         console.error(error);
@@ -98,6 +108,7 @@ function startScanning() {
 }
 
 
+
 // =====================================
 // เมื่อสแกนสำเร็จ
 // =====================================
@@ -106,12 +117,19 @@ async function onScanSuccess(decodedText) {
 
     console.log("สแกนได้:", decodedText);
 
-    // เอาเฉพาะตัวเลข
-    let isbn = decodedText.replace(/[^0-9Xx]/g, "");
+
+    // เอาเฉพาะตัวเลขและ X
+    const isbn =
+        decodedText.replace(/[^0-9Xx]/g, "");
+
 
     console.log("ISBN:", isbn);
 
-    document.getElementById("isbn").value = isbn;
+
+    // ใส่ ISBN
+    document.getElementById("isbn").value =
+        isbn;
+
 
     document.getElementById("scan-result").innerText =
         "🔎 กำลังค้นหาข้อมูลหนังสือ...";
@@ -129,125 +147,194 @@ async function onScanSuccess(decodedText) {
         } catch (error) {
 
             console.log(error);
-
         }
     }
 
 
-    // ค้นหาข้อมูลหนังสือ
-    searchBook(isbn);
+    // ตรวจสอบ ISBN
+    if (
+        isbn.length !== 10 &&
+        isbn.length !== 13
+    ) {
+
+        document.getElementById("scan-result").innerText =
+            "⚠️ ISBN ไม่ถูกต้อง: " + isbn;
+
+        return;
+    }
+
+
+    // ค้นหาหนังสือ
+    searchOpenLibrary(isbn);
 }
 
 
+
 // =====================================
-// ค้นหาหนังสือจาก Google Books
+// ค้นหาหนังสือจาก Open Library
 // =====================================
 
-async function searchBook(isbn) {
+async function searchOpenLibrary(isbn) {
 
     try {
 
-        console.log("กำลังค้นหา ISBN:", isbn);
+        console.log(
+            "กำลังค้นหา Open Library:",
+            isbn
+        );
 
 
         const url =
-            "https://www.googleapis.com/books/v1/volumes" +
-            "?q=isbn:" +
+            "https://openlibrary.org/api/books" +
+            "?bibkeys=ISBN:" +
             encodeURIComponent(isbn) +
-            "&maxResults=1";
+            "&format=json" +
+            "&jscmd=data";
 
 
         console.log("API URL:", url);
 
 
-        const response = await fetch(url);
-
-
-        console.log("HTTP Status:", response.status);
+        const response =
+            await fetch(url);
 
 
         if (!response.ok) {
 
             throw new Error(
-                "HTTP Error " + response.status
+                "HTTP Error " +
+                response.status
             );
         }
 
 
-        const data = await response.json();
+        const data =
+            await response.json();
 
 
-        console.log("Google Books:", data);
+        console.log(
+            "Open Library:",
+            data
+        );
 
 
-        if (
-            !data.items ||
-            data.items.length === 0
-        ) {
+        const book =
+            data["ISBN:" + isbn];
+
+
+        // =====================================
+        // ไม่พบหนังสือ
+        // =====================================
+
+        if (!book) {
 
             document.getElementById("scan-result").innerText =
-                "⚠️ ไม่พบข้อมูลหนังสือ ISBN: " + isbn;
+                "⚠️ ไม่พบข้อมูลหนังสือ ISBN: " +
+                isbn;
 
             return;
         }
 
 
-        const book = data.items[0].volumeInfo;
-
-
         // =====================================
-        // ใส่ข้อมูลลงช่อง
+        // ชื่อหนังสือ
         // =====================================
 
         document.getElementById("title").value =
             book.title || "";
 
 
-        document.getElementById("author").value =
-            book.authors
-                ? book.authors.join(", ")
-                : "";
+        // =====================================
+        // ผู้แต่ง
+        // =====================================
+
+        if (
+            book.authors &&
+            book.authors.length > 0
+        ) {
+
+            document.getElementById("author").value =
+                book.authors
+                    .map(author => author.name)
+                    .join(", ");
+
+        } else {
+
+            document.getElementById("author").value =
+                "";
+        }
 
 
-        document.getElementById("publisher").value =
-            book.publisher || "";
+        // =====================================
+        // สำนักพิมพ์
+        // =====================================
 
+        if (
+            book.publishers &&
+            book.publishers.length > 0
+        ) {
+
+            document.getElementById("publisher").value =
+                book.publishers
+                    .map(publisher => publisher.name)
+                    .join(", ");
+
+        } else {
+
+            document.getElementById("publisher").value =
+                "";
+        }
+
+
+        // =====================================
+        // ปีที่พิมพ์
+        // =====================================
 
         document.getElementById("year").value =
-            book.publishedDate || "";
+            book.publish_date || "";
 
+
+        // =====================================
+        // จำนวนหน้า
+        // =====================================
 
         document.getElementById("pages").value =
-            book.pageCount || "";
+            book.number_of_pages || "";
 
 
-        document.getElementById("category").value =
-            book.categories
-                ? book.categories.join(", ")
-                : "";
+        // =====================================
+        // หมวดหมู่
+        // =====================================
+
+        if (
+            book.subjects &&
+            book.subjects.length > 0
+        ) {
+
+            document.getElementById("category").value =
+                book.subjects
+                    .slice(0, 5)
+                    .map(subject => subject.name)
+                    .join(", ");
+
+        } else {
+
+            document.getElementById("category").value =
+                "";
+        }
 
 
         // =====================================
         // ราคา
         // =====================================
 
-        if (
-            data.items[0].saleInfo &&
-            data.items[0].saleInfo.listPrice
-        ) {
+        document.getElementById("price").value =
+            "กรุณากรอกราคา";
 
-            const price =
-                data.items[0].saleInfo.listPrice;
 
-            document.getElementById("price").value =
-                price.amount + " " + price.currencyCode;
-
-        } else {
-
-            document.getElementById("price").value =
-                "ไม่พบข้อมูลราคา";
-        }
-
+        // =====================================
+        // สำเร็จ
+        // =====================================
 
         document.getElementById("scan-result").innerText =
             "✅ พบข้อมูลหนังสือแล้ว";
@@ -256,16 +343,16 @@ async function searchBook(isbn) {
     } catch (error) {
 
         console.error(
-            "Google Books Error:",
+            "Open Library Error:",
             error
         );
 
 
         document.getElementById("scan-result").innerText =
-            "❌ ไม่สามารถเชื่อมต่อ Google Books ได้";
-
+            "❌ ไม่สามารถเชื่อมต่อ Open Library ได้";
     }
 }
+
 
 
 // =====================================
@@ -276,6 +363,7 @@ function onScanFailure(error) {
 
     // ไม่ต้องแสดงข้อความ
 }
+
 
 
 // =====================================
@@ -348,6 +436,7 @@ if (switchCameraButton) {
 }
 
 
+
 // =====================================
 // เริ่มระบบ
 // =====================================
@@ -355,13 +444,15 @@ if (switchCameraButton) {
 startCamera();
 
 
+
 // =====================================
-// ปุ่มบันทึก
+// ปุ่มบันทึกข้อมูล
 // =====================================
 
 document.getElementById("saveButton").addEventListener(
     "click",
     function () {
+
 
         const book = {
 
@@ -400,5 +491,6 @@ document.getElementById("saveButton").addEventListener(
         alert(
             "💾 บันทึกข้อมูลเรียบร้อยแล้ว"
         );
+
     }
 );
